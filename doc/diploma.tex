@@ -1,0 +1,139 @@
+\documentclass[makeidx, a4paper, 14pt]{extarticle}
+\usepackage{makeidx}
+
+% Enable cyrillic support
+\usepackage[T1,T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[main=russian,english]{babel}
+
+% Math
+\usepackage{amssymb, amsthm, amsmath, euscript}
+
+% Figures
+\usepackage{graphicx}
+\usepackage{subfigure}
+
+% Title page
+\usepackage{fancyhdr}
+
+% Section titles.
+\usepackage{titlesec}
+
+% Sections
+\newcommand{\sectionbreak}{\clearpage}
+
+% Symbols
+\newcommand{\R}{\mathbb{R}}
+
+% Define blocks.
+\newtheorem{definition}{Определение}
+
+\begin{document}
+
+\begin{titlepage}
+    \thispagestyle{fancy}
+    \renewcommand{\headrulewidth}{0pt}
+    \begin{center}
+        МОСКОВСКИЙ ГОСУДАРСТВЕННЫЙ УНИВЕРСИТЕТ \\
+        имени М.В. ЛОМОНОСОВА
+        \medskip
+        ФИЛИАЛ В ГОРОДЕ ТАШКЕНТЕ
+
+        \bigskip
+        \bigskip
+
+        ФАКУЛЬТЕТ ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ
+        \medskip
+        КАФЕДРА ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ
+
+        \bigskip
+        \hrule
+        \bigskip
+
+        \large{Ванесян Роман Грачикович}
+
+        \bigskip
+        \bigskip
+
+        \textbf{ВЫПУСКНАЯ КВАЛИФИКАЦИОННАЯ РАБОТА}
+
+        \bigskip
+        \bigskip
+
+        \textbf{«Оптическое распознавание схем из функциональных элементов»}
+
+        \bigskip
+        \bigskip
+        \bigskip
+        \bigskip
+        \bigskip
+        \bigskip
+
+        \begin{small}
+            \begin{flushleft}
+              Научный руководитель, \\
+              к.ф.-м.н. \underline{\hspace{10.25cm}} Шуткин Ю.С.
+            \end{flushleft}
+        
+            \smallskip
+        
+            \begin{flushright}
+              «\underline{\hspace{1cm}}» \underline{\hspace{3.5cm}} 2020 г.
+            \end{flushright}
+        \end{small}
+
+        \cfoot{ТАШКЕНТ - 2020}
+    \end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{АА}
+
+\begin{definition}
+    Изображением будем называть множество \\ ${I = \{p_i \mid p_i \in C\}}$ на плоскости,
+    где множество $C$ --- множество любой природы.
+\end{definition}
+
+\begin{definition}
+    Изображение для которого множество $C$ определено как ${\{0, 1\}}$ будем называть двоичным изображением.
+\end{definition}
+
+\begin{definition}
+Множество ${V = \{p_i \mid p_i \in D\}}$ будем считать вершиной, если:
+\begin{itemize}
+    \item Пусть ${F \subset V}$. Подмножество ${H = \{p_i \mid p_i \in F, p_i=1\}}$ образует одну из следующих фигур: треугольник, окружность, либо прямоугольник.
+    \item Пусть ${G = F \setminus H}$. Существует такое подмножество \\
+          ${M=\{p_i \mid p_i \in G, p_i=1\}}$ --- метка вершины.
+    \item Никакие две рядом лежащие вершины не расположены так,
+          что пересечение минамальных гиперпрямоугольников (прямоугольник в смысле $\R^2$)
+          содержащих соответствующие вершины есть множество не пустое, то есть: \\
+          ${\forall V_i, V_j, \quad V_i \neq V_j, i \neq j: P(V_i) \cap P(V_j) = \varnothing}$.
+\end{itemize}
+\end{definition}
+
+\begin{definition}
+Ребром будем называть жорданову дугу образованную последовательностью точек ${p_i=1}$
+и соединяющее вершины ${v_i, v_j, i \neq j}$.
+\end{definition}
+
+\section{asdasd}
+
+\begin{definition}
+    Схемой из функциональных элементов (СФЭ) над базисом ${F \cup X}$ будем называть ориентированны граф,
+    каждая вершина которого помечена одним из элементов множества ${F \cup X}$, либо обозначением формулы.
+\end{definition}
+
+При изображении схемы из функциональных элементов входы будем обозначать окружностями, внутри которых записаны входные переменные.
+Вершины являющиеся операциями, --- треугольниками, внутри которых записаны обозначения соответствующих функций. А вершину обозначающую
+выход СФЭ, будем обозначать прямоугольником, внутри которого записано обозначение реализуемой формулы. Выходы функций будем отмечать "выходными" стрелками.
+
+Без ограничения общности будем полагать, что СФЭ определена над стандартным базисом ${\{x_1 \wedge x_2, x_1 \vee x_2, \neg{x_1}\}}$.
+
+Так же будем рассматривать задачу о распознавании двоичного изображения СФЭ.
+Так как любую задачу о распознавании изображения СФЭ можно свести к аналогичной задаче о распознавания
+двоичного изображения СФЭ, путем введения биективного отображения, которое по какому-то заранее известному
+закону каждой точке изображения ставит в соответствие точку в двоичном отображении.
+
+\end{document}
