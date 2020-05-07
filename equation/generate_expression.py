@@ -1,5 +1,6 @@
 from random import choice, random
 import ast
+import numpy as np
 
 __all__ = ('generate_expression')
 
@@ -13,28 +14,33 @@ UNARY_OPS = [ast.OperationExpression.Op.NOT]
 
 
 last_variable_index = 1
+variables_table = np.array([0], dtype=np.uint8)
 
 
 def get_variable_name(current_max_index: int, max_index: int):
     global last_variable_index
+    global variables_table
 
-    next_max_index = current_max_index
-
-    if max_index > 1:
+    if current_max_index > 1:
         while True:
-            index = choice([i for i in range(1, max_index + 1)])
+            if np.sum(variables_table) == current_max_index and current_max_index < max_index:
+                current_max_index = current_max_index + 1
+                variables_table = np.append(variables_table, [0])
+
+            index = choice([i for i in range(1, current_max_index + 1)])
+            variables_table[index - 1] = 1
 
             if last_variable_index != index:
                 last_variable_index = index
                 break
     else:
         index = 1
-
-    if max_index > current_max_index + 1:
-        next_max_index +=1
+        current_max_index += 1
+        variables_table[index - 1] = 1
+        variables_table = np.append(variables_table, [0])
 
     name = 'x{}'.format(index)
-    return next_max_index, name
+    return current_max_index, name
 
 
 def generate_partial_expression(variable_index: int, max_variables: int, ops_num: int):
@@ -76,7 +82,6 @@ def generate_expressions(max_variables: int, ops_num: int):
         if random() < PROB_NOT_EQ:
             eq = ast.UnaryOperationExpression(choice(UNARY_OPS), eq)
     else:
-        if random() < PROB_BINARY:
-            return
+        return
 
     return ast.Equation(eq)

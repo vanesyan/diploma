@@ -117,9 +117,9 @@ class BinaryOperationExpression(OperationExpression):
 ###############################################################################
 
 OPERATION_SYMBOLS = {
-    OperationExpression.Op.AND: '∧',
-    OperationExpression.Op.NOT: '¬',
-    OperationExpression.Op.OR: '∨'
+    OperationExpression.Op.AND: '&',
+    OperationExpression.Op.NOT: '!',
+    OperationExpression.Op.OR: '|'
 }
 
 
@@ -225,20 +225,41 @@ if __name__ == '__main__':
         graphviz_visitor = GraphvizVisitor()
 
         data = Equation(
+            # BinaryOperationExpression(
+            #     OperationExpression.Op.AND,
+            #     UnaryOperationExpression(
+            #         OperationExpression.Op.NOT,
+            #         BinaryOperationExpression(
+            #             OperationExpression.Op.OR,
+            #             UnaryOperationExpression(
+            #                 OperationExpression.Op.NOT,
+            #                 Term('x1')
+            #             ),
+            #             Term('x2')
+            #         )
+            #     ),
+            #     Term('x1')
+            # )
             BinaryOperationExpression(
-                OperationExpression.Op.AND,
-                UnaryOperationExpression(
-                    OperationExpression.Op.NOT,
+                OperationExpression.Op.OR,
+                BinaryOperationExpression(
+                    OperationExpression.Op.OR,
                     BinaryOperationExpression(
-                        OperationExpression.Op.OR,
-                        UnaryOperationExpression(
-                            OperationExpression.Op.NOT,
-                            Term('a')
-                        ),
-                        Term('b')
+                        OperationExpression.Op.AND,
+                        Term('x1'),
+                        Term('x2'),
+                    ),
+                    BinaryOperationExpression(
+                        OperationExpression.Op.AND,
+                        Term('x1'),
+                        Term('x3'),
                     )
                 ),
-                Term('a')
+                BinaryOperationExpression(
+                    OperationExpression.Op.AND,
+                    Term('x2'),
+                    Term('x3'),
+                )
             )
         )
 

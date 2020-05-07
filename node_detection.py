@@ -14,10 +14,10 @@ SHAPE_APPROX_EPSILON = 0.03
 
 class Node:
     class Type:
-        UNDEFINED = 0
-        OPERATOR = 1
-        VARIABLE = 2
-        OUTPUT = 3
+        UNDEFINED = 'undefined'
+        OPERATOR = 'operator'
+        VARIABLE = 'variable'
+        OUTPUT = 'output'
 
     def __init__(self, shape_index, symbol_index, box):
         self.shape_index = shape_index
@@ -34,7 +34,7 @@ def is_intersect(r1, r2):
     Checks whether r1 intersects with r2.
     """
 
-    eps = 0 # int(EPS / 2)
+    eps = 0  # int(EPS / 2)
     p11, p12 = r1
     p21, p22 = r2
 
@@ -55,26 +55,61 @@ def is_contains(r1, r2):
     return p11.x <= p21.x <= p22.x <= p12.x and p11.y <= p21.y <= p22.y <= p12.y
 
 
-def detect_shape(contour) -> int:
-    p = cv2.arcLength(contour, True)
-    approx = cv2.approxPolyDP(
-        contour, SHAPE_APPROX_EPSILON * p, True)
-    point_nums = len(approx)
+def detect_shape(polygon) -> int:
+    h, w = polygon.shape
+    tbox = np.zeros((h, w), dtype=np.uint8)
+    center = (int(w / 2), int(h / 2))
+    r = int(min(w, h) / 2)
 
-    # Triangle
-    if point_nums == 3:
-        return Node.Type.OPERATOR
-    # Rectangle
-    elif point_nums == 4:
-        return Node.Type.OUTPUT
+    # Circle shape
+    tcbox = tbox.copy()
+    tcbox = cv2.circle(tcbox, center, r, color=255, thickness=cv2.FILLED)
 
-    # TODO: find circles.
-    # Circle
-    else:
-        # https://www.sciencedirect.com/science/article/abs/pii/S0031320314001976
-        return Node.Type.VARIABLE
+    # Rectangle shape
+    ttbox = tbox.copy()
+    ttbox[:, :] = 255
 
-    return Node.Type.UNDEFINED
+    # Triangle shape
+    ttrbox = tbox.copy()
+    ttrbox = cv2.drawContours(ttrbox, [np.array(
+        [[0, 0], [int(w/2), h], [w, 0]], dtype=np.int32)], -1, color=255, thickness=cv2.FILLED)
+
+    # Ellipse shape
+    tebox = tbox.copy()
+    tebox = cv2.ellipse(tebox, center, (int(w/2), int(h/2)),
+                        0, 0, 360, color=255, thickness=cv2.FILLED)
+
+    # cv2.imwrite("cbox.png", polygon)
+    # cv2.imwrite("ttbox.png", ttbox)
+    # cv2.imwrite("tcbox.png", tcbox)
+    # cv2.imwrite("trtbox.png", ttrbox)
+    # cv2.imwrite("tebox.png", tebox)
+
+    tcdiff = np.bitwise_xor(tcbox, polygon)
+    ttdiff = np.bitwise_xor(ttbox, polygon)
+    ttrdiff = np.bitwise_xor(ttrbox, polygon)
+    tediff = np.bitwise_xor(tebox, polygon)
+
+    # cv2.imwrite("tcdiff.png", tcdiff)
+    # cv2.imwrite("ttdiff.png", ttdiff)
+    # cv2.imwrite("ttrdiff.png", ttrdiff)
+    # cv2.imwrite("tediff.png", tediff)
+
+    shapes = [Node.Type.OPERATOR, Node.Type.VARIABLE,
+              Node.Type.VARIABLE, Node.Type.OUTPUT]
+
+    index = np.argmin([
+        np.sum(np.bitwise_xor(ttrbox, polygon) > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(tcbox, polygon)
+               > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(tebox, polygon)
+               > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(ttbox, polygon) > 1, dtype=np.int32)
+    ])
+
+    print(shapes[index])
+
+    return shapes[index]
 
 
 def filter_contours(image, contours):
@@ -173,11 +208,9 @@ def preprocessing(image):
     processed_pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
     processed_pixels = cv2.GaussianBlur(processed_pixels, (3, 3), 0)
     _, processed_pixels = cv2.threshold(
-        processed_pixels, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+        processed_pixels, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
-    # edged = cv2.Canny(processed_pixels, 50, 100)
-
-    # threshold = cv2.adaptiveThreshold(processed_pixels, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 205, 1)
+    cv2.imshow("Binarized image", processed_pixels)
 
     # Detect contours
     nodes, _ = cv2.findContours(
@@ -191,14 +224,7 @@ def preprocessing(image):
 
     vertices_pixels = np.zeros((image.shape[0], image.shape[1], 3), np.uint8)
     vertices_pixels = cv2.cvtColor(cv2.drawContours(vertices_pixels, prefinal_contours, -1,
-                                             color=(255, 255, 255), thickness=cv2.FILLED), cv2.COLOR_BGR2GRAY)
-
-    # Binary openning (first pass)
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(9, 9))
-    # vertices_pixels = cv2.morphologyEx(vertices_pixels, cv2.MORPH_CLOSE, kernel)
-
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(7, 7))
-    # vertices_pixels = cv2.dilate(vertices_pixels, kernel)
+                                                    color=(255, 255, 255), thickness=cv2.FILLED), cv2.COLOR_BGR2GRAY)
 
     # Fill nodes.
     processed_pixels = cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)
@@ -220,6 +246,8 @@ def preprocessing(image):
 
     vertices_pixels = vertices_pixels | vertices_pixels_floodfill_inv
     processed_pixels = vertices_pixels | processed_pixels
+    kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(2, 2))
+    processed_pixels = cv2.dilate(processed_pixels, kernel)
 
     cv2.imshow("Vertices pixels", vertices_pixels)
     cv2.imshow("Processed image", processed_pixels)
@@ -227,21 +255,11 @@ def preprocessing(image):
     return processed_pixels, vertices_pixels
 
 
-def recongnize_char():
-    images = np.load('data/chars_glyphs.npy')
-    labels = np.load('data/chars_labels.npy')
-
-    from sys import maxsize
-    np.set_printoptions(threshold=maxsize)
-
-    # print(labels)
-
-
 def detect_labels(image, vertices_pixels):
     nodes, _ = cv2.findContours(
         vertices_pixels, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-    symbols = {} # symbols
+    symbols = {}  # symbols
     w, h, _ = image.shape
     test_polygon = np.zeros((w, h, 3), dtype=np.uint8)
     connected_components = np.zeros((w, h), dtype=np.uint32)
@@ -250,21 +268,14 @@ def detect_labels(image, vertices_pixels):
     processing_image = image.copy()
 
     processing_image = cv2.cvtColor(processing_image, cv2.COLOR_BGR2GRAY)
-    # processing_image = cv2.blur(processing_image, (3, 3))
     _, processing_image = cv2.threshold(
         processing_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    result = cv2.copyTo(processing_image, vertices_pixels)
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(5,5))
-    # result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel)
-    chars, _ = cv2.findContours(result, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    result = vertices_pixels.copy()
+    result = cv2.copyTo(processing_image, result)
+    kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 1))
+    result = cv2.erode(result, kernel)
 
-    # print(chars)
-
-    for node in chars:
-        x, y, w, h = cv2.boundingRect(node)
-        cv2.rectangle(result, (x, y), (x+w, y+h), (0, 255, 0), 1)
-
-    cv2.imshow("Masked vertices", result)
+    cv2.imshow("Masked", result)
 
     for index, node in enumerate(nodes):
         name = index+1
@@ -274,32 +285,56 @@ def detect_labels(image, vertices_pixels):
         cv2.putText(debug_image, str(name), (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
+        part = vertices_pixels[y:(y+h), x:(x+w)]
+        node_type = detect_shape(part)
+
         processing_image = cv2.drawContours(processing_image, [node], 0,
-                         color=(255, 255, 255), thickness=10)
-        # rect = processing_image[(y+10):(y+h-10), (x+10):(x+w-10)]
-
-
-        # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(3,3))
-        # rect = cv2.morphologyEx(rect, cv2.MORPH_CLOSE, kernel)
-        # rect = ~cv2.dilate(~rect, kernel)
-        # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(5,5))
-        # rect = cv2.morphologyEx(rect, cv2.MORPH_CLOSE, kernel)
-
-        # rect = Image.fromarray(rect)
-
-        # rect.save(str(y)+str(x)+'.png')
-
+                                            color=(255, 255, 255), thickness=10)
         test_polygon = cv2.drawContours(test_polygon, [node], 0,
-                         color=(1, 0, 0), thickness=cv2.FILLED)
-        x, y = np.where(test_polygon[:, :, 0] == 1)
-        # points = np.stack((x, y), axis=-1)
+                                        color=(1, 0, 0), thickness=cv2.FILLED)
+        xa, ya = np.where(test_polygon[:, :, 0] == 1)
 
-        connected_components[x, y] = name
-        node_type = detect_shape(node)
-        symbols[name] = (node_type, '1')
+        # Create polygon of marked nodes
+        connected_components[xa, ya] = name
+
+        # Detect text
+        rect = result[y:(y+h), x:(x+w)]
+        kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(5, 5))
+        mask = cv2.dilate(np.bitwise_not(
+            vertices_pixels[y:(y+h), x:(x+w)]), kernel)
+        rect = np.bitwise_or(rect, mask)
+        edge_mask = np.full_like(rect, 255)
+        edge_mask[1:-1, 1:-1] = 0
+        rect = np.bitwise_or(rect, edge_mask)
+        text = pytesseract.run_and_get_output(Image.fromarray(
+            rect), extension='txt', lang='eng', config='--oem 1 --psm 10 tesseract_config.ini')
+
+        print(text)
+
+        if text == 'I':
+            text = '|'
+
+        symbols[name] = (node_type, text, x+w/2)
 
         # Clean Up
         test_polygon = test_polygon * 0
+
+    # t = ''
+
+    # for node in nodes:
+    #     x, y, w, h = cv2.boundingRect(node)
+
+    #     rect = result[y:(y+h), x:(x+w)]
+    #     kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(5, 5))
+    #     mask = cv2.dilate(np.bitwise_not(
+    #         vertices_pixels[y:(y+h), x:(x+w)]), kernel)
+    #     rect = np.bitwise_or(rect, mask)
+    #     edge_mask = np.full_like(rect, 255)
+    #     edge_mask[1:-1, 1:-1] = 0
+    #     rect = np.bitwise_or(rect, edge_mask)
+    #     text = pytesseract.run_and_get_output(Image.fromarray(rect), extension='txt', lang='eng', config='--oem 1 --psm 10 tesseract_config.ini')
+    #     print(len(text))
+    #     t += text
 
     # np.savetxt('test.txt', connected_components, fmt='%d')
     cv2.imshow("Detect labels image", debug_image)
@@ -313,24 +348,25 @@ def classify_edges(pixels, vertices_pixels):
     thinning.zhang_and_suen_binary_thinning(skel)
     cv2.imshow("Skel", np.array(skel * 255, dtype=np.uint8))
 
-    classified_pixels, port_pixels = ogr.edge_classification(skel, vertices_pixels)
+    classified_pixels, port_pixels = ogr.edge_classification(
+        skel, vertices_pixels)
 
     # Clean Up single port pixels
-    # rows, cols = classified_pixels.shape
-    # port_pixels_ = set(port_pixels)
-    # for x in range(0, rows):
-    #     for y in range(0, cols):
-    #         # Port pixels
-    #         if classified_pixels[x, y] == 4:
-    #             should_remove = True
-    #             for pixel in ogr.get_eight_neighborhood(classified_pixels, x, y):
-    #                 if pixel > 1:
-    #                     should_remove = False
-    #                     break
-    #             if should_remove:
-    #                 port_pixels_.remove((x, y))
-    #                 classified_pixels[x, y] = 1
-    # port_pixels = list(port_pixels_)
+    rows, cols = classified_pixels.shape
+    port_pixels_ = set(port_pixels)
+    for x in range(0, rows):
+        for y in range(0, cols):
+            # Port pixels
+            if classified_pixels[x, y] == 4:
+                should_remove = True
+                for pixel in ogr.get_eight_neighborhood(classified_pixels, x, y):
+                    if pixel > 1:
+                        should_remove = False
+                        break
+                if should_remove:
+                    port_pixels_.remove((x, y))
+                    classified_pixels[x, y] = 1
+    port_pixels = list(port_pixels_)
 
     R = np.zeros((pixels.shape), dtype=np.uint8)
     G = np.zeros((pixels.shape), dtype=np.uint8)
@@ -354,16 +390,16 @@ def classify_edges(pixels, vertices_pixels):
     return classified_pixels, port_pixels
 
 
-i1 = 0
-
 class Graph:
     nodes = []
 
     class Node:
-        def __init__(self, index, type):
+        def __init__(self, index, type, name, x):
             self.index = index
             self.edges = []
             self.type = type
+            self.name = name
+            self.x = x
 
         def add_edge(self, node):
             self.edges.append(node)
@@ -374,12 +410,24 @@ class Graph:
                 child = self.edges[0]
                 return ast.Equation(self.edges[0].eq())
             elif self.type == Node.Type.VARIABLE:
-                return ast.Term(str(self.index))
+                return ast.Term(str(self.name))
             elif self.type == Node.Type.OPERATOR:
                 if len(self.edges) == 2:
-                    return ast.BinaryOperationExpression(ast.OperationExpression.Op.AND, self.edges[0].eq(), self.edges[1].eq())
+                    if self.name == '&':
+                        op = ast.OperationExpression.Op.AND
+                    elif self.name == '|':
+                        op = ast.OperationExpression.Op.OR
+
+                    n1 = self.edges[0]
+                    n2 = self.edges[1]
+                    
+                    if n1.x > n2.x:
+                        n1, n2 = n2, n1
+
+                    return ast.BinaryOperationExpression(op, n1.eq(), n2.eq())
                 else:
-                    return ast.UnaryOperationExpression(ast.OperationExpression.Op.NOT, self.edges[0].eq())
+                    if self.name == '!':
+                        return ast.UnaryOperationExpression(ast.OperationExpression.Op.NOT, self.edges[0].eq())
 
 
 def get_eq_tree(connected_components, symbols, dict_edge_sections):
@@ -391,9 +439,9 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
         v = connected_components[pos_v[0], pos_v[1]]
 
         if u not in nodes:
-            nodes[u] = Graph.Node(u, symbols[u][0])
+            nodes[u] = Graph.Node(u, symbols[u][0], symbols[u][1], symbols[u][2])
         if v not in nodes:
-            nodes[v] = Graph.Node(v, symbols[v][0])
+            nodes[v] = Graph.Node(v, symbols[v][0], symbols[v][1], symbols[v][2])
 
         node1 = nodes[u]
         node2 = nodes[v]
@@ -418,8 +466,9 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
 def main():
     from PIL import Image
 
-    image = cv2.imread("fuzzy.png", 1)
-    # image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_LANCZOS4)
+    image = cv2.imread("fuzzy.png")
+    # image = cv2.resize(image, None, fx=0.5, fy=0.5,
+    #                    interpolation=cv2.INTER_LANCZOS4)
 
     cv2.imshow("Original", image)
 
@@ -432,6 +481,13 @@ def main():
 
     classified_pixels, port_pixels = classify_edges(pixels, vertices_pixels)
 
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # return
+
+    print("Traversing graph")
+
     trivial_sections,\
         port_sections,\
         crossing_pixels_in_port_sections,\
@@ -442,33 +498,28 @@ def main():
                                              last_gradients)
 
     edge_sections = trivial_sections + merged_sections
-    dict_edge_sections = ogr.get_dict_edge_sections(edge_sections, vertices_pixels)
+    dict_edge_sections = ogr.get_dict_edge_sections(
+        edge_sections, vertices_pixels)
 
-    # print(edge_sections)
-    # print(dict_edge_sections)
+    # # print(edge_sections)
+    # # print(dict_edge_sections)
 
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
     # return
 
+    print("Getting eq")
+
     equal = get_eq_tree(connected_components, symbols, dict_edge_sections)
 
-    visitor = ast.GraphvizVisitor()
-    g = visitor.visit(equal)
+    image_visitor = ast.GraphvizVisitor()
+    string_visitor = ast.StringVisitor()
 
-    # from graphviz import Graph
-    # G = Graph('eq')
+    g = image_visitor.visit(equal)
+    f = string_visitor.visit(equal)
 
-    # for u in symbols.keys():
-    #     G.node(str(u))
-
-
-    # print("Getting edges extremes and adding edges in the graph.")
-    # for (pos_u, pos_v) in dict_edge_sections:
-    #     u = connected_components[pos_u[0], pos_u[1]]
-    #     v = connected_components[pos_v[0], pos_v[1]]
-    #     G.edge(str(u), str(v))
+    print(f)
 
     g.format = 'PNG'
     g.render()
