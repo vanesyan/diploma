@@ -7,9 +7,17 @@ import thinning
 import pytesseract
 from PIL import Image
 
+__all__ = ('recognize',)
+
 Point = namedtuple('Point', 'x y')
 EPS = 20
-SHAPE_APPROX_EPSILON = 0.03
+MAX_SHAPE_DIFF = 1000
+DEBUG = True
+PATH = '.'
+
+
+def get_path(name):
+    return '{}/{}'.format(PATH, name)
 
 
 class Node:
@@ -79,24 +87,25 @@ def detect_shape(polygon) -> int:
     tebox = cv2.ellipse(tebox, center, (int(w/2), int(h/2)),
                         0, 0, 360, color=255, thickness=cv2.FILLED)
 
-    # cv2.imwrite("cbox.png", polygon)
-    # cv2.imwrite("ttbox.png", ttbox)
-    # cv2.imwrite("tcbox.png", tcbox)
-    # cv2.imwrite("trtbox.png", ttrbox)
-    # cv2.imwrite("tebox.png", tebox)
-
     tcdiff = np.bitwise_xor(tcbox, polygon)
     ttdiff = np.bitwise_xor(ttbox, polygon)
     ttrdiff = np.bitwise_xor(ttrbox, polygon)
     tediff = np.bitwise_xor(tebox, polygon)
 
-    # cv2.imwrite("tcdiff.png", tcdiff)
-    # cv2.imwrite("ttdiff.png", ttdiff)
-    # cv2.imwrite("ttrdiff.png", ttrdiff)
-    # cv2.imwrite("tediff.png", tediff)
-
     shapes = [Node.Type.OPERATOR, Node.Type.VARIABLE,
               Node.Type.VARIABLE, Node.Type.OUTPUT]
+
+    m = np.min([
+        np.sum(np.bitwise_xor(ttrbox, polygon) > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(tcbox, polygon)
+               > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(tebox, polygon)
+               > 1, dtype=np.int32),
+        np.sum(np.bitwise_xor(ttbox, polygon) > 1, dtype=np.int32)
+    ])
+
+    if m > MAX_SHAPE_DIFF:
+        return Node.Type.UNDEFINED
 
     index = np.argmin([
         np.sum(np.bitwise_xor(ttrbox, polygon) > 1, dtype=np.int32),
@@ -107,29 +116,32 @@ def detect_shape(polygon) -> int:
         np.sum(np.bitwise_xor(ttbox, polygon) > 1, dtype=np.int32)
     ])
 
-    print(shapes[index])
-
     return shapes[index]
 
 
 def filter_contours(image, contours):
+    global DEBUG
     rectangles = []
 
     preprocessed_image = image.copy()
 
     for index, contour in enumerate(contours):
         x, y, w, h = cv2.boundingRect(contour)
+
         rectangle = (
             Point(x, y),
             Point(x + w, y + h)
         )
         rectangles.append(rectangle)
-        cv2.rectangle(preprocessed_image,
-                      rectangle[0], rectangle[1], (0, 255, 0), 1)
-        cv2.putText(preprocessed_image, str(index), (x, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-    cv2.imshow("Preprocessed image", preprocessed_image)
+        if DEBUG:
+            cv2.rectangle(preprocessed_image,
+                          rectangle[0], rectangle[1], (0, 255, 0), 1)
+            cv2.putText(preprocessed_image, str(index), (x, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+    if DEBUG:
+        cv2.imshow("Preprocessed image", preprocessed_image)
 
     i = 0
     l = len(rectangles)
@@ -190,19 +202,22 @@ def filter_contours(image, contours):
     postprocessed_image = image.copy()
 
     # Debug
-    for index, contour in enumerate(prefinal_contours):
-        x, y, w, h = cv2.boundingRect(contour)
+    if DEBUG:
+        for index, contour in enumerate(prefinal_contours):
+            x, y, w, h = cv2.boundingRect(contour)
 
-        cv2.rectangle(postprocessed_image, (x, y), (x+w, y+h), (0, 255, 0), 1)
-        cv2.putText(postprocessed_image, str(index), (x, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            cv2.rectangle(postprocessed_image, (x, y),
+                          (x+w, y+h), (0, 255, 0), 1)
+            cv2.putText(postprocessed_image, str(index), (x, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-    cv2.imshow("Postprocessed image", postprocessed_image)
+        cv2.imshow("Postprocessed image", postprocessed_image)
 
     return prefinal_contours
 
 
 def preprocessing(image):
+    global DEBUG
     pixels = image.copy()
 
     processed_pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
@@ -210,7 +225,10 @@ def preprocessing(image):
     _, processed_pixels = cv2.threshold(
         processed_pixels, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
-    cv2.imshow("Binarized image", processed_pixels)
+    if DEBUG:
+        cv2.imshow("Binarized image", processed_pixels)
+    else:
+        cv2.imwrite(get_path("binarized_image.png"), processed_pixels)
 
     # Detect contours
     nodes, _ = cv2.findContours(
@@ -221,10 +239,24 @@ def preprocessing(image):
 
     prefinal_contours = filter_contours(
         pixels.copy(), nodes)
+    final_contours = []
 
     vertices_pixels = np.zeros((image.shape[0], image.shape[1], 3), np.uint8)
     vertices_pixels = cv2.cvtColor(cv2.drawContours(vertices_pixels, prefinal_contours, -1,
                                                     color=(255, 255, 255), thickness=cv2.FILLED), cv2.COLOR_BGR2GRAY)
+
+    for node in prefinal_contours:
+        x, y, w, h = cv2.boundingRect(node)
+        part = vertices_pixels[y:(y+h), x:(x+w)]
+        node_type = detect_shape(part)
+
+        if node_type != Node.Type.UNDEFINED:
+            final_contours.append(node)
+
+    vertices_pixels = np.zeros((image.shape[0], image.shape[1], 3), np.uint8)
+    vertices_pixels = cv2.cvtColor(cv2.drawContours(vertices_pixels, final_contours, -1,
+                                                    color=(255, 255, 255), thickness=cv2.FILLED), cv2.COLOR_BGR2GRAY)
+
 
     # Fill nodes.
     processed_pixels = cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)
@@ -238,24 +270,30 @@ def preprocessing(image):
 
     # Floodfill from point (0, 0).
     cv2.floodFill(vertices_pixels_floodfill, mask, (0, 0), 255)
-    # cv2.imshow("Vertices pixels filled", vertices_pixels_floodfill)
+    #   cv2.imshow("Vertices pixels filled", vertices_pixels_floodfill)
 
     # Invert floodfilled image
     vertices_pixels_floodfill_inv = np.bitwise_not(vertices_pixels_floodfill)
-    # cv2.imshow("Vertices pixels filled inverted", vertices_pixels_floodfill_inv)
+    #   cv2.imshow("Vertices pixels filled inverted", vertices_pixels_floodfill_inv)
 
     vertices_pixels = vertices_pixels | vertices_pixels_floodfill_inv
     processed_pixels = vertices_pixels | processed_pixels
-    kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(2, 2))
-    processed_pixels = cv2.dilate(processed_pixels, kernel)
+    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(2, 2))
+    # processed_pixels = cv2.dilate(processed_pixels, kernel)
 
-    cv2.imshow("Vertices pixels", vertices_pixels)
-    cv2.imshow("Processed image", processed_pixels)
+    if DEBUG:
+        cv2.imshow("Vertices pixels", vertices_pixels)
+        cv2.imshow("Processed image", processed_pixels)
+    else:
+        cv2.imwrite(get_path("vertices_pixels.png"), vertices_pixels)
+        cv2.imwrite(get_path("processed_image.png"), processed_pixels)
 
     return processed_pixels, vertices_pixels
 
 
 def detect_labels(image, vertices_pixels):
+    global DEBUG
+
     nodes, _ = cv2.findContours(
         vertices_pixels, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -268,14 +306,17 @@ def detect_labels(image, vertices_pixels):
     processing_image = image.copy()
 
     processing_image = cv2.cvtColor(processing_image, cv2.COLOR_BGR2GRAY)
-    _, processing_image = cv2.threshold(
-        processing_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    # _, processing_image = cv2.threshold(
+    #     processing_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     result = vertices_pixels.copy()
     result = cv2.copyTo(processing_image, result)
-    kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 1))
-    result = cv2.erode(result, kernel)
+    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 1))
+    # result = cv2.erode(result, kernel)
 
-    cv2.imshow("Masked", result)
+    if DEBUG:
+        cv2.imshow("Masked", result)
+    else:
+        cv2.imwrite(get_path("masked.png"), result)
 
     for index, node in enumerate(nodes):
         name = index+1
@@ -309,44 +350,31 @@ def detect_labels(image, vertices_pixels):
         text = pytesseract.run_and_get_output(Image.fromarray(
             rect), extension='txt', lang='eng', config='--oem 1 --psm 10 tesseract_config.ini')
 
-        print(text)
 
-        if text == 'I':
-            text = '|'
-
+        # print(text)
         symbols[name] = (node_type, text, x+w/2)
 
         # Clean Up
         test_polygon = test_polygon * 0
 
-    # t = ''
-
-    # for node in nodes:
-    #     x, y, w, h = cv2.boundingRect(node)
-
-    #     rect = result[y:(y+h), x:(x+w)]
-    #     kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(5, 5))
-    #     mask = cv2.dilate(np.bitwise_not(
-    #         vertices_pixels[y:(y+h), x:(x+w)]), kernel)
-    #     rect = np.bitwise_or(rect, mask)
-    #     edge_mask = np.full_like(rect, 255)
-    #     edge_mask[1:-1, 1:-1] = 0
-    #     rect = np.bitwise_or(rect, edge_mask)
-    #     text = pytesseract.run_and_get_output(Image.fromarray(rect), extension='txt', lang='eng', config='--oem 1 --psm 10 tesseract_config.ini')
-    #     print(len(text))
-    #     t += text
-
-    # np.savetxt('test.txt', connected_components, fmt='%d')
-    cv2.imshow("Detect labels image", debug_image)
+    if DEBUG:
+        cv2.imshow("Detect labels image", debug_image)
+    else:
+        cv2.imwrite(get_path("detect_labels.png"), debug_image)
 
     return connected_components, symbols
 
 
 def classify_edges(pixels, vertices_pixels):
-    skel = pixels.copy()
+    global DEBUG
 
+    skel = pixels.copy()
     thinning.zhang_and_suen_binary_thinning(skel)
-    cv2.imshow("Skel", np.array(skel * 255, dtype=np.uint8))
+
+    if DEBUG:
+        cv2.imshow("Skel", np.array(skel * 255, dtype=np.uint8))
+    else:
+        cv2.imwrite(get_path("image_skelet.png"), np.array(skel * 255, dtype=np.uint8))
 
     classified_pixels, port_pixels = ogr.edge_classification(
         skel, vertices_pixels)
@@ -385,7 +413,10 @@ def classify_edges(pixels, vertices_pixels):
     B = (255 * B)
     bgr = np.dstack((B, G, R)).astype(np.uint8)
 
-    cv2.imshow("Classified Pixels", bgr)
+    if DEBUG:
+        cv2.imshow("Classified Pixels", bgr)
+    else:
+        cv2.imwrite(get_path("classified_pixels.png"), bgr)
 
     return classified_pixels, port_pixels
 
@@ -407,30 +438,38 @@ class Graph:
         def eq(self):
             if self.type == Node.Type.OUTPUT:
                 # assuming only one node
-                child = self.edges[0]
-                return ast.Equation(self.edges[0].eq())
+                child = self.edges[0][0]
+                return ast.Equation(child.eq())
             elif self.type == Node.Type.VARIABLE:
                 return ast.Term(str(self.name))
             elif self.type == Node.Type.OPERATOR:
                 if len(self.edges) == 2:
                     if self.name == '&':
                         op = ast.OperationExpression.Op.AND
-                    elif self.name == '|':
+                    elif self.name == '|' or self.name == 'I' or self.name == '1':
                         op = ast.OperationExpression.Op.OR
 
-                    n1 = self.edges[0]
-                    n2 = self.edges[1]
-                    
-                    if n1.x > n2.x:
+                    if self.name == '!':
+                        raise Exception('Unary operator must not have 2 operands!')
+
+                    n1 = self.edges[0][0]
+                    x1 = self.edges[0][1]
+                    n2 = self.edges[1][0]
+                    x2 = self.edges[1][1]
+
+                    if x1 > x2:
                         n1, n2 = n2, n1
 
                     return ast.BinaryOperationExpression(op, n1.eq(), n2.eq())
                 else:
-                    if self.name == '!':
-                        return ast.UnaryOperationExpression(ast.OperationExpression.Op.NOT, self.edges[0].eq())
+                    child = self.edges[0][0]
+                    if self.name == '!' or self.name == 'I' or self.name == '1':
+                        return ast.UnaryOperationExpression(ast.OperationExpression.Op.NOT, child.eq())
 
 
 def get_eq_tree(connected_components, symbols, dict_edge_sections):
+    global DEBUG
+
     indexes = symbols.keys()
     nodes = {}
 
@@ -439,9 +478,11 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
         v = connected_components[pos_v[0], pos_v[1]]
 
         if u not in nodes:
-            nodes[u] = Graph.Node(u, symbols[u][0], symbols[u][1], symbols[u][2])
+            nodes[u] = Graph.Node(
+                u, symbols[u][0], symbols[u][1], symbols[u][2])
         if v not in nodes:
-            nodes[v] = Graph.Node(v, symbols[v][0], symbols[v][1], symbols[v][2])
+            nodes[v] = Graph.Node(
+                v, symbols[v][0], symbols[v][1], symbols[v][2])
 
         node1 = nodes[u]
         node2 = nodes[v]
@@ -450,9 +491,9 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
         # print(pos_u, pos_v)
 
         if pos_u[0] < pos_v[0]:
-            node2.add_edge(node1)
+            node2.add_edge((node1, pos_u[1]))
         else:
-            node1.add_edge(node2)
+            node1.add_edge((node2, pos_v[1]))
 
     root = None
     for i in nodes.keys():
@@ -463,14 +504,21 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
     return root.eq()
 
 
-def main():
-    from PIL import Image
+def recognize(path: str, debug=True):
+    global DEBUG
+    global PATH
 
-    image = cv2.imread("fuzzy.png")
+    from os import path as p
+
+    DEBUG = debug
+    PATH = p.dirname(path) or '.'
+
+    image = cv2.imread(path)
     # image = cv2.resize(image, None, fx=0.5, fy=0.5,
     #                    interpolation=cv2.INTER_LANCZOS4)
 
-    cv2.imshow("Original", image)
+    if DEBUG:
+        cv2.imshow("Original", image)
 
     pixels, vertices_pixels = preprocessing(image)
     connected_components, symbols = detect_labels(image, vertices_pixels)
@@ -486,7 +534,8 @@ def main():
 
     # return
 
-    print("Traversing graph")
+    if DEBUG:
+        print("Traversing graph")
 
     trivial_sections,\
         port_sections,\
@@ -501,15 +550,8 @@ def main():
     dict_edge_sections = ogr.get_dict_edge_sections(
         edge_sections, vertices_pixels)
 
-    # # print(edge_sections)
-    # # print(dict_edge_sections)
-
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # return
-
-    print("Getting eq")
+    if DEBUG:
+        print("Getting eq")
 
     equal = get_eq_tree(connected_components, symbols, dict_edge_sections)
 
@@ -517,16 +559,20 @@ def main():
     string_visitor = ast.StringVisitor()
 
     g = image_visitor.visit(equal)
+    g.format = 'PNG'
+
     f = string_visitor.visit(equal)
 
-    print(f)
+    if DEBUG:
+        g.render()
 
-    g.format = 'PNG'
-    g.render()
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    else:
+        g.render(get_path("image_result"))
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    return f
 
 
 if __name__ == "__main__":
-    main()
+    recognize("fuzzy.png")

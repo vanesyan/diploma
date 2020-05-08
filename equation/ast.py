@@ -167,7 +167,7 @@ class GraphvizVisitor(Visitor):
         self._terms = {}
 
         self._graph.attr(rankdir='BT') #, splines='false')
-        self._subgraph_terms.attr(rank='same')
+        self._subgraph_terms.attr(rank='same', rankdir='LR')
 
     def visit(self, node: 'Node') -> Graph:
         node.accept(self)
@@ -225,21 +225,6 @@ if __name__ == '__main__':
         graphviz_visitor = GraphvizVisitor()
 
         data = Equation(
-            # BinaryOperationExpression(
-            #     OperationExpression.Op.AND,
-            #     UnaryOperationExpression(
-            #         OperationExpression.Op.NOT,
-            #         BinaryOperationExpression(
-            #             OperationExpression.Op.OR,
-            #             UnaryOperationExpression(
-            #                 OperationExpression.Op.NOT,
-            #                 Term('x1')
-            #             ),
-            #             Term('x2')
-            #         )
-            #     ),
-            #     Term('x1')
-            # )
             BinaryOperationExpression(
                 OperationExpression.Op.OR,
                 BinaryOperationExpression(
