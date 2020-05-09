@@ -25,8 +25,8 @@ def generate(n: int):
         string_visitor = ast.StringVisitor()
         graphviz_visitor = ast.GraphvizVisitor()
 
-        vars_num = randint(7, 8)
-        ops_num = vars_num + randint(0, 14)
+        vars_num = randint(2, 8)
+        ops_num = vars_num + randint(0, 4)
         eq = generate_expressions(vars_num, ops_num)
         dirname = '{}_{}_{}'.format(i, vars_num, ops_num)
         dirpath = './data/{}'.format(dirname)
