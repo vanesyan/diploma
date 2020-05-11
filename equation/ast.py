@@ -166,7 +166,7 @@ class GraphvizVisitor(Visitor):
         self._subgraph_terms = Graph('terms')
         self._terms = {}
 
-        self._graph.attr(rankdir='BT') #, splines='false')
+        self._graph.attr(rankdir='BT', ordering='out') #, splines='false')
         self._subgraph_terms.attr(rank='same', rankdir='LR')
 
     def visit(self, node: 'Node') -> Graph:

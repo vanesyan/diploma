@@ -6,21 +6,24 @@ import ogr
 import thinning
 import pytesseract
 from PIL import Image
+import math
 
 __all__ = ('recognize',)
 
 Point = namedtuple('Point', 'x y')
-EPS = 20
+
+# EPS = 20
 MAX_SHAPE_DIFF = 1000
 DEBUG = True
 PATH = '.'
+HANDWRITTEN = False
 
 
 def get_path(name):
     return '{}/{}'.format(PATH, name)
 
 
-class Node:
+class Contour:
     class Type:
         UNDEFINED = 'undefined'
         OPERATOR = 'operator'
@@ -30,7 +33,7 @@ class Node:
     def __init__(self, shape_index, symbol_index, box):
         self.shape_index = shape_index
         self.symbol_index = symbol_index
-        self.type = Node.Type.UNDEFINED
+        self.type = Contour.Type.UNDEFINED
         self.box = box
 
     def __repr__(self):
@@ -92,8 +95,8 @@ def detect_shape(polygon) -> int:
     ttrdiff = np.bitwise_xor(ttrbox, polygon)
     tediff = np.bitwise_xor(tebox, polygon)
 
-    shapes = [Node.Type.OPERATOR, Node.Type.VARIABLE,
-              Node.Type.VARIABLE, Node.Type.OUTPUT]
+    shapes = [Contour.Type.OPERATOR, Contour.Type.VARIABLE,
+              Contour.Type.VARIABLE, Contour.Type.OUTPUT]
 
     m = np.min([
         np.sum(np.bitwise_xor(ttrbox, polygon) > 1, dtype=np.int32),
@@ -104,8 +107,10 @@ def detect_shape(polygon) -> int:
         np.sum(np.bitwise_xor(ttbox, polygon) > 1, dtype=np.int32)
     ])
 
+    s = np.sum(polygon)
+
     if m > MAX_SHAPE_DIFF:
-        return Node.Type.UNDEFINED
+        return Contour.Type.UNDEFINED
 
     index = np.argmin([
         np.sum(np.bitwise_xor(ttrbox, polygon) > 1, dtype=np.int32),
@@ -159,12 +164,12 @@ def filter_contours(image, contours):
                 # print("contains", (i, j))
 
                 klist[i] -= 1
-                potential_nodes.append(Node(i, j, r1))
+                potential_nodes.append(Contour(i, j, r1))
             elif is_contains(r2, r1):
                 # print("contains", (j, i))
 
                 klist[j] -= 1
-                potential_nodes.append(Node(j, i, r1))
+                potential_nodes.append(Contour(j, i, r1))
             if is_intersect(r1, r2) or is_intersect(r2, r1):
                 p11, p12 = r1
                 p21, p22 = r2
@@ -250,13 +255,12 @@ def preprocessing(image):
         part = vertices_pixels[y:(y+h), x:(x+w)]
         node_type = detect_shape(part)
 
-        if node_type != Node.Type.UNDEFINED:
+        if node_type != Contour.Type.UNDEFINED:
             final_contours.append(node)
 
     vertices_pixels = np.zeros((image.shape[0], image.shape[1], 3), np.uint8)
     vertices_pixels = cv2.cvtColor(cv2.drawContours(vertices_pixels, final_contours, -1,
                                                     color=(255, 255, 255), thickness=cv2.FILLED), cv2.COLOR_BGR2GRAY)
-
 
     # Fill nodes.
     processed_pixels = cv2.cvtColor(pixels, cv2.COLOR_BGR2GRAY)
@@ -278,8 +282,11 @@ def preprocessing(image):
 
     vertices_pixels = vertices_pixels | vertices_pixels_floodfill_inv
     processed_pixels = vertices_pixels | processed_pixels
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(2, 2))
-    # processed_pixels = cv2.dilate(processed_pixels, kernel)
+
+    if HANDWRITTEN:
+        kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(3, 3))
+        processed_pixels = cv2.morphologyEx(
+            processed_pixels, cv2.MORPH_CLOSE, kernel)
 
     if DEBUG:
         cv2.imshow("Vertices pixels", vertices_pixels)
@@ -306,12 +313,16 @@ def detect_labels(image, vertices_pixels):
     processing_image = image.copy()
 
     processing_image = cv2.cvtColor(processing_image, cv2.COLOR_BGR2GRAY)
-    # _, processing_image = cv2.threshold(
-    #     processing_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    if HANDWRITTEN:
+        _, processing_image = cv2.threshold(
+            processing_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
     result = vertices_pixels.copy()
     result = cv2.copyTo(processing_image, result)
-    # kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 1))
-    # result = cv2.erode(result, kernel)
+
+    if HANDWRITTEN:
+        kernel = cv2.getStructuringElement(shape=cv2.MORPH_RECT, ksize=(1, 1))
+        result = cv2.erode(result, kernel)
 
     if DEBUG:
         cv2.imshow("Masked", result)
@@ -347,9 +358,14 @@ def detect_labels(image, vertices_pixels):
         edge_mask = np.full_like(rect, 255)
         edge_mask[1:-1, 1:-1] = 0
         rect = np.bitwise_or(rect, edge_mask)
+
+        if HANDWRITTEN:
+            kernel = cv2.getStructuringElement(
+                shape=cv2.MORPH_RECT, ksize=(2, 2))
+            rect = cv2.dilate(rect, kernel)
+
         text = pytesseract.run_and_get_output(Image.fromarray(
             rect), extension='txt', lang='eng', config='--oem 1 --psm 10 tesseract_config.ini')
-
 
         # print(text)
         symbols[name] = (node_type, text, x+w/2)
@@ -374,7 +390,8 @@ def classify_edges(pixels, vertices_pixels):
     if DEBUG:
         cv2.imshow("Skel", np.array(skel * 255, dtype=np.uint8))
     else:
-        cv2.imwrite(get_path("image_skelet.png"), np.array(skel * 255, dtype=np.uint8))
+        cv2.imwrite(get_path("image_skelet.png"),
+                    np.array(skel * 255, dtype=np.uint8))
 
     classified_pixels, port_pixels = ogr.edge_classification(
         skel, vertices_pixels)
@@ -436,13 +453,13 @@ class Graph:
             self.edges.append(node)
 
         def eq(self):
-            if self.type == Node.Type.OUTPUT:
+            if self.type == Contour.Type.OUTPUT:
                 # assuming only one node
                 child = self.edges[0][0]
                 return ast.Equation(child.eq())
-            elif self.type == Node.Type.VARIABLE:
+            elif self.type == Contour.Type.VARIABLE:
                 return ast.Term(str(self.name))
-            elif self.type == Node.Type.OPERATOR:
+            elif self.type == Contour.Type.OPERATOR:
                 if len(self.edges) == 2:
                     if self.name == '&':
                         op = ast.OperationExpression.Op.AND
@@ -450,7 +467,8 @@ class Graph:
                         op = ast.OperationExpression.Op.OR
 
                     if self.name == '!':
-                        raise Exception('Unary operator must not have 2 operands!')
+                        raise Exception(
+                            'Unary operator must not have 2 operands!')
 
                     n1 = self.edges[0][0]
                     x1 = self.edges[0][1]
@@ -463,7 +481,7 @@ class Graph:
                     return ast.BinaryOperationExpression(op, n1.eq(), n2.eq())
                 else:
                     child = self.edges[0][0]
-                    if self.name == '!' or self.name == 'I' or self.name == '1':
+                    if self.name == '!' or self.name == 'I' or self.name == '1' or self.name == '|':
                         return ast.UnaryOperationExpression(ast.OperationExpression.Op.NOT, child.eq())
 
 
@@ -497,25 +515,30 @@ def get_eq_tree(connected_components, symbols, dict_edge_sections):
 
     root = None
     for i in nodes.keys():
-        if nodes[i].type == Node.Type.OUTPUT:
+        if nodes[i].type == Contour.Type.OUTPUT:
             root = nodes[i]
             break
 
     return root.eq()
 
 
-def recognize(path: str, debug=True):
+def recognize(path: str, debug=True, scale=1, handwritten=False, maxdiff=1000):
     global DEBUG
     global PATH
+    global HANDWRITTEN
+    global MAX_SHAPE_DIFF
 
     from os import path as p
 
     DEBUG = debug
     PATH = p.dirname(path) or '.'
+    HANDWRITTEN = handwritten
+    MAX_SHAPE_DIFF = maxdiff
 
     image = cv2.imread(path)
-    # image = cv2.resize(image, None, fx=0.5, fy=0.5,
-    #                    interpolation=cv2.INTER_LANCZOS4)
+    if scale != 1:
+        image = cv2.resize(image, None, fx=scale, fy=scale,
+                           interpolation=cv2.INTER_LANCZOS4)
 
     if DEBUG:
         cv2.imshow("Original", image)
@@ -550,6 +573,11 @@ def recognize(path: str, debug=True):
     dict_edge_sections = ogr.get_dict_edge_sections(
         edge_sections, vertices_pixels)
 
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # return
+
     if DEBUG:
         print("Getting eq")
 
@@ -574,5 +602,34 @@ def recognize(path: str, debug=True):
     return f
 
 
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Optical block function diagram recognition.')
+    parser.add_argument('path', metavar='path', type=str,
+                        help='Path to file to process')
+    parser.add_argument('--handwritten',
+                        action='store_true',
+                        default=False,
+                        help='Indicates handwritten mode')
+    parser.add_argument('--scale',
+                        type=float,
+                        default=1.0,
+                        help='Sets image scale factor')
+    parser.add_argument('--debug',
+                        action='store_true',
+                        default=False,
+                        help='Debug mode')
+    parser.add_argument('--maxdiff',
+                        type=int,
+                        default=1000,
+                        help='Indicates maximum diff pixels that allowed to be considered a known shape')
+
+    args = parser.parse_args()
+    recognize(args.path, args.debug, args.scale, args.handwritten, args.maxdiff)
+
+
 if __name__ == "__main__":
-    recognize("fuzzy.png")
+    main()
+    # recognize("fuzzy.jpg", scale=0.5, handwritten=True)

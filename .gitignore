@@ -25,3 +25,5 @@ equation/data
 env
 
 !doc/images/*.png
+
+!examples/*.png
