@@ -5,7 +5,7 @@
 % Enable cyrillic support
 \usepackage[T1,T2A]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[main=russian,english]{babel}
+\usepackage[main=russian, english]{babel}
 
 % Images
 \usepackage{graphicx}
@@ -49,20 +49,27 @@
     \thispagestyle{fancy}
     \renewcommand{\headrulewidth}{0pt}
     \begin{center}
-        МОСКОВСКИЙ ГОСУДАРСТВЕННЫЙ УНИВЕРСИТЕТ \\
-        имени М.В. ЛОМОНОСОВА
-        \medskip
-        ФИЛИАЛ В ГОРОДЕ ТАШКЕНТЕ
+        \begin{small}
+            МОСКОВСКИЙ ГОСУДАРСТВЕННЫЙ УНИВЕРСИТЕТ \\
+            имени М.В. ЛОМОНОСОВА
+            \medskip
+            ФИЛИАЛ В ГОРОДЕ ТАШКЕНТЕ
 
-        \bigskip
-        \bigskip
+            \bigskip
+            \bigskip
 
-        ФАКУЛЬТЕТ ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ
-        \medskip
-        КАФЕДРА ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ
+            ФАКУЛЬТЕТ ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ \\
+
+            \medskip
+
+            КАФЕДРА ПРИКЛАДНОЙ МАТЕМАТИКИ И ИНФОРМАТИКИ
+        \end{small}
 
         \bigskip
         \hrule
+
+        \bigskip
+        \bigskip
         \bigskip
 
         \large{Ванесян Роман Грачикович}
@@ -75,7 +82,12 @@
         \bigskip
         \bigskip
 
-        \textbf{«Оптическое распознавание схем из функциональных элементов»}
+        \textbf{«Оптическое распознавание схем из функциональных элементов»} \\
+        \textbf{«Optical recognition of function block diagrams»}
+        \bigskip
+        \bigskip
+
+        \small{\textbf{По направлению 01.03.02 «Прикладная математика и информатика»}}
 
         \bigskip
         \bigskip
@@ -86,8 +98,14 @@
 
         \begin{small}
             \begin{flushleft}
-              Научный руководитель, \\
-              к.ф.-м.н. \underline{\hspace{10cm}} Шуткин Ю.С.
+                ВКР рассмотрена и рекомендована к защите  \\
+                зав. кафедрой «ПМиИ», д.ф.-м.н., профессор \underline{\hspace{2.9cm}} Кудрявцев В.Б.
+            \end{flushleft}
+
+            
+            \begin{flushleft}
+                Научный руководитель, \\
+                к.ф.-м.н. \underline{\hspace{10cm}} Шуткин Ю.С.
             \end{flushleft}
 
             \smallskip
@@ -107,7 +125,15 @@
 В данной работе рассматривается проблема распознавания графического изображения схемы из функциональных элементов. Схема из функциональных элементов --- это
 ориентированный граф с вершинами специального вида и ребрами, --- жордановыми дугами. Результатом данной работы является прототип программы,
 которая показывает эффективность подхода описанного в данной работе. Результатом данной программы может быть как текстовая запись формулы
-представленной данной схемой из функциональных элементов, так и сгенерированный код на языке DOT \cite{dot_lang}.
+представленной данной схемой из функциональных элементов, так и сгенерированный код на языке DOT \cite{dot_lang}. \\
+
+\section*{Abstract}
+\begin{otherlanguage}{english}
+    \noindent An optical recognition of functional block diagrams approach is proposed in this paper.
+    Functional block diagram is a directed graph with vertices of special shapes and edges represented by Jordan curves.
+    The prototypical implementation shows the effectiveness of the proposed approach. Output of the program is
+    either formula representing given functional block diagram or generated code on DOT [1] language.
+\end{otherlanguage}
 
 \tableofcontents
 
