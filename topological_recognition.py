@@ -1,6 +1,5 @@
 import numpy as np
 
-import morphology
 from circular_list import CircularList
 from collections import Counter
 

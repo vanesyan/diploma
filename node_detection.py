@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from equation import ast
 from collections import namedtuple
-import ogr
+import topological_recognition
 import thinning
 import pytesseract
 from PIL import Image
@@ -393,7 +393,7 @@ def classify_edges(pixels, vertices_pixels):
         cv2.imwrite(get_path("image_skelet.png"),
                     np.array(skel * 255, dtype=np.uint8))
 
-    classified_pixels, port_pixels = ogr.edge_classification(
+    classified_pixels, port_pixels = topological_recognition.edge_classification(
         skel, vertices_pixels)
 
     # Clean Up single port pixels
@@ -404,7 +404,7 @@ def classify_edges(pixels, vertices_pixels):
             # Port pixels
             if classified_pixels[x, y] == 4:
                 should_remove = True
-                for pixel in ogr.get_eight_neighborhood(classified_pixels, x, y):
+                for pixel in topological_recognition.get_eight_neighborhood(classified_pixels, x, y):
                     if pixel > 1:
                         should_remove = False
                         break
@@ -563,14 +563,14 @@ def recognize(path: str, debug=True, scale=1, handwritten=False, maxdiff=1000):
     trivial_sections,\
         port_sections,\
         crossing_pixels_in_port_sections,\
-        last_gradients = ogr.edge_sections_identify(
+        last_gradients = topological_recognition.edge_sections_identify(
             classified_pixels, port_pixels)
-    merged_sections = ogr.traversal_subphase(classified_pixels,
+    merged_sections = topological_recognition.traversal_subphase(classified_pixels,
                                              crossing_pixels_in_port_sections,
                                              last_gradients)
 
     edge_sections = trivial_sections + merged_sections
-    dict_edge_sections = ogr.get_dict_edge_sections(
+    dict_edge_sections = topological_recognition.get_dict_edge_sections(
         edge_sections, vertices_pixels)
 
     # cv2.waitKey(0)
