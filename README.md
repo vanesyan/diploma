@@ -11,6 +11,9 @@ $ pip3 install -r requirements.txt
 ```
 
 To test program program itself:
+```
+$ python3 generate_tests.py
+```
 
 To test program on synthetic tests run:
 ```
