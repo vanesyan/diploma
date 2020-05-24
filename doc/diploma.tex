@@ -144,7 +144,37 @@
 схем из функциональных элементов и по полученным данным генерировать код, который далее может быть интерпретирован с помощью таких специальных программ. \\
 Вообще говоря, схема из функциональных элементов строится по заданной логической формуле. Данный процесс называется \emph{синтезом} схемы из функциональных элементов.
 При синтезе схем для достаточно сложных формул может возникнуть проблема некорректного ее построения. Применяя подход описанный в данной работе, можно так же построить
-алгоритм для валидации полученных схем в ходе синтеза.
+алгоритм для валидации полученных схем в ходе синтеза. \\
+
+Приведем пример результата работы алгоритма предложенного в данной статье 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=60mm]{handwritten_2.png}
+    \caption{Пример графического изображения СФЭ нарисованного от руки.}
+    \label{fig:handwritten_2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=55mm]{handwritten_2_binarized_image.png}
+    \includegraphics[width=55mm]{handwritten_2_detect_labels.png}
+    \includegraphics[width=55mm]{handwritten_2_vertices_pixels.png}
+    \includegraphics[width=55mm]{handwritten_2_masked.png}
+    \includegraphics[width=55mm]{handwritten_2_processed_image.png}
+    \includegraphics[width=55mm]{handwritten_2_image_skelet.png}
+\end{figure}
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=55mm]{handwritten_2_classified_pixels.png}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics{handwritten_2_result.png}
+    \caption{Результат распознавания СФЭ изображенной на рис. \ref{fig:handwritten_2}}
+\end{figure}
 
 \section{Постановка задачи}
 Пусть задано некоторое множество булевых функций \[{B = {f_1(x_1, \dots, x_{n_1}), \dots, f_s(x_1, \dots, x_{n_s})}}, \]
@@ -350,7 +380,8 @@ $1$, а пиксели образующие метку --- значение $0$.
     \caption{Пример результата работы алгоритма выделения метки.}
 \end{figure}
 
-Далее, к полученной изображению, применяя, к примеру, алгоритм распознавания текста основанный на нейронной сети с долгой краткосрочной памятью (в английской литературе LSTM based OCR) \cite{adnan16, tesseract}
+Далее, к полученной изображению, применяя, к примеру, алгоритм распознавания текста основанный на алгоритме классификации KNN \cite{knn}
+с предварительными применениями аффинных преобразований и морфологической обработки (например, применяя алгоритм скелетонизации \cite{zhang_suen84})
 получим текстовую запись метки данной вершины.
 
 Таким образом, применяя приведенный алгоритм к каждой вершине СФЭ, получим все текстовые записи меток.
@@ -564,39 +595,7 @@ $P_e$ --- класс пикселей представляющих собой п
 Помимо проведения тестирования на задача сгенерированных программой для тестирования, так же были проведены испытания
 на СФЭ нарисованных от руки.
 
-Рассмотрим первый пример графического изображения СФЭ нарисованного от руки.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=60mm]{handwritten_2.png}
-    \caption{Пример графического изображения СФЭ нарисованного от руки.}
-    \label{fig:handwritten_2}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=55mm]{handwritten_2_binarized_image.png}
-    \includegraphics[width=55mm]{handwritten_2_detect_labels.png}
-    \includegraphics[width=55mm]{handwritten_2_vertices_pixels.png}
-    \includegraphics[width=55mm]{handwritten_2_masked.png}
-    \includegraphics[width=55mm]{handwritten_2_processed_image.png}
-    \includegraphics[width=55mm]{handwritten_2_image_skelet.png}
-\end{figure}
-
-\begin{figure}[H]
-        \centering
-        \includegraphics[width=55mm]{handwritten_2_classified_pixels.png}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics{handwritten_2_result.png}
-    \caption{Результат распознавания СФЭ изображенной на рис. \ref{fig:handwritten_2}}
-\end{figure}
-
-\newpage
-
-Рассмотрим второй пример графического изображения СФЭ нарисованного от руки.
+Рассмотрим пример графического изображения СФЭ нарисованного от руки.
 
 \begin{figure}[H]
     \centering
@@ -610,18 +609,14 @@ $P_e$ --- класс пикселей представляющих собой п
     \centering
     \includegraphics[width=70mm]{handwritten_1_binarized_image.png}
     \includegraphics[width=70mm]{handwritten_1_detect_labels.png}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
     \includegraphics[width=70mm]{handwritten_1_vertices_pixels.png}
     \includegraphics[width=70mm]{handwritten_1_masked.png}
-    \includegraphics[width=70mm]{handwritten_1_processed_image.png}
-    \includegraphics[width=70mm]{handwritten_1_image_skelet.png}
 \end{figure}
 
 \begin{figure}[H]
     \centering
+    \includegraphics[width=70mm]{handwritten_1_processed_image.png}
+    \includegraphics[width=70mm]{handwritten_1_image_skelet.png}
     \includegraphics[width=70mm]{handwritten_1_classified_pixels.png}
 \end{figure}
 
@@ -653,9 +648,9 @@ $P_e$ --- класс пикселей представляющих собой п
         \textit{A threshold selection method from gray-level histograms. IEEE Trans. Sys., Man., Cyber. : journal. — 1979. — Vol. 9. — P. 62—66.}
     \bibitem{suzuki85} Suzuki, S. and Abe, K.,
         \textit{Topological Structural Analysis of Digitized Binary Images by Border Following. CVGIP 30 1, pp 32-46 (1985)}
-    \bibitem{adnan16} Adnan Ul-Hasan
-        \textit{Generic Text Recognition using Long Short-Term Memory Networks}
-        \url{https://kluedo.ub.uni-kl.de/frontdoor/deliver/index/docId/4353/file/PhD_Thesis_Ul-Hasan.pdf}
+    \bibitem{knn}
+        \textit{k-nearest neighbors algorithm} \\
+        \url{https://en.wikipedia.org/wiki/K-nearest_neighbors_algorithm}
     \bibitem{tesseract}
         \url{https://tesseract-ocr.github.io/}
     \bibitem{auer13} Ch. Auer, Ch. Bachmaier, F. Gleißner, and J. Reislhuber
